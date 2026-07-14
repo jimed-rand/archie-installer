@@ -20,6 +20,22 @@
 
 set -e
 
+# When this script is executed via a pipe (e.g. `wget -qO- <url> | bash` or
+# `curl -sL <url> | bash`), stdin is consumed by the pipe carrying the script
+# itself, so `read -p` prompts below would silently fail or read garbage
+# instead of waiting for real user input. Re-point stdin at the controlling
+# terminal so all interactive prompts work correctly regardless of how the
+# script was launched.
+if [ ! -t 0 ]; then
+    if [ -e /dev/tty ]; then
+        exec < /dev/tty
+    else
+        echo "ERROR: This installer requires an interactive terminal (no /dev/tty available)." >&2
+        echo "Download the script and run it directly instead of piping it into bash." >&2
+        exit 1
+    fi
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'

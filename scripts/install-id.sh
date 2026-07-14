@@ -20,6 +20,22 @@
 
 set -e
 
+# Ketika skrip ini dijalankan lewat pipe (mis. `wget -qO- <url> | bash` atau
+# `curl -sL <url> | bash`), stdin dipakai untuk mengalirkan isi skrip itu
+# sendiri, sehingga prompt `read -p` di bawah bisa gagal diam-diam atau
+# membaca data yang salah, bukan menunggu input pengguna. Arahkan ulang stdin
+# ke terminal pengendali agar semua prompt interaktif tetap bekerja terlepas
+# dari cara skrip ini dijalankan.
+if [ ! -t 0 ]; then
+    if [ -e /dev/tty ]; then
+        exec < /dev/tty
+    else
+        echo "ERROR: Installer ini membutuhkan terminal interaktif (tidak ada /dev/tty)." >&2
+        echo "Unduh skrip ini lalu jalankan langsung, jangan di-pipe ke bash." >&2
+        exit 1
+    fi
+fi
+
 # Warna untuk output
 RED='\033[0;31m'
 GREEN='\033[0;32m'

@@ -31,7 +31,7 @@ NC='\033[0m' # No Color
 EMMC_DEVICE=""
 SSD_DEVICE=""
 NVME_DEVICE=""
-ESP_SIZE="256M"
+ESP_SIZE_MIB=256
 SWAP_SIZE=""
 ROOT_FS="xfs"
 HOME_FS="xfs"
@@ -155,13 +155,14 @@ select_main_storage() {
     echo "Available storage devices:"
     local index=1
     for storage in "${AVAILABLE_STORAGES[@]}"; do
-        local type=$(echo "$storage" | cut -d: -f1)
-        local device=$(echo "$storage" | cut -d: -f2)
+        local type device
+        type=$(echo "$storage" | cut -d: -f1)
+        device=$(echo "$storage" | cut -d: -f2)
         echo "$index. $type ($device)"
         ((index++))
     done
     
-    read -p "Select main storage for system (root/): [1-${#AVAILABLE_STORAGES[@]}]: " main_choice
+    read -r -p "Select main storage for system (root/): [1-${#AVAILABLE_STORAGES[@]}]: " main_choice
     MAIN_STORAGE=$(echo "${AVAILABLE_STORAGES[$((main_choice-1))]}" | cut -d: -f2)
     MAIN_STORAGE_TYPE=$(echo "${AVAILABLE_STORAGES[$((main_choice-1))]}" | cut -d: -f1)
     
@@ -191,13 +192,14 @@ select_home_storage() {
     echo "Select location for /home:"
     local index=1
     for storage in "${AVAILABLE_STORAGES[@]}"; do
-        local type=$(echo "$storage" | cut -d: -f1)
-        local device=$(echo "$storage" | cut -d: -f2)
+        local type device
+        type=$(echo "$storage" | cut -d: -f1)
+        device=$(echo "$storage" | cut -d: -f2)
         echo "$index. $type ($device)"
         ((index++))
     done
     
-    read -p "Select /home location: [1-${#AVAILABLE_STORAGES[@]}]: " home_choice
+    read -r -p "Select /home location: [1-${#AVAILABLE_STORAGES[@]}]: " home_choice
     HOME_STORAGE=$(echo "${AVAILABLE_STORAGES[$((home_choice-1))]}" | cut -d: -f2)
     HOME_STORAGE_TYPE=$(echo "${AVAILABLE_STORAGES[$((home_choice-1))]}" | cut -d: -f1)
     
@@ -228,7 +230,7 @@ partition_main_storage() {
     # Check if already partitioned
     if lsblk "$device" | grep -q "part"; then
         print_warning "$device already has partitions"
-        read -p "Do you want to repartition? This will delete all data! [y/N]: " confirm
+        read -r -p "Do you want to repartition? This will delete all data! [y/N]: " confirm
         if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
             print_info "Using existing partitions"
             return 0
@@ -241,13 +243,13 @@ partition_main_storage() {
     
     # Create new partition table with parted
     parted "$device" mklabel gpt
-    parted "$device" mkpart ESP fat32 1MiB 257MiB
+    parted "$device" mkpart ESP fat32 1MiB $((ESP_SIZE_MIB + 1))MiB
     parted "$device" set 1 boot on
     parted "$device" set 1 esp on
     
     # Ask for swap size
     echo "Swap size (minimum 4 GiB, maximum 10 GiB):"
-    read -p "Enter swap size in GiB [4]: " swap_input
+    read -r -p "Enter swap size in GiB [4]: " swap_input
     SWAP_SIZE="${swap_input:-4}"
     
     if [[ "$SWAP_SIZE" -lt 4 ]]; then
@@ -257,7 +259,7 @@ partition_main_storage() {
     fi
     
     # Calculate partition sizes
-    ESP_END=257
+    ESP_END=$((ESP_SIZE_MIB + 1))
     SWAP_START=$ESP_END
     SWAP_END=$((SWAP_START + (SWAP_SIZE * 1024)))
     
@@ -265,13 +267,13 @@ partition_main_storage() {
     
     # If home is separate on the same storage
     if [[ "$SEPARATE_HOME" == true ]]; then
-        read -p "Enter /home size in GiB: " home_size
+        read -r -p "Enter /home size in GiB: " home_size
         HOME_START=$SWAP_END
         HOME_END=$((HOME_START + (home_size * 1024)))
-        parted "$device" mkpart home xfs ${HOME_START}MiB ${HOME_END}MiB
-        parted "$device" mkpart root xfs ${HOME_END}MiB 100%
+        parted "$device" mkpart home ${HOME_FS} ${HOME_START}MiB ${HOME_END}MiB
+        parted "$device" mkpart root ${ROOT_FS} ${HOME_END}MiB 100%
     else
-        parted "$device" mkpart root xfs ${SWAP_END}MiB 100%
+        parted "$device" mkpart root ${ROOT_FS} ${SWAP_END}MiB 100%
     fi
     
     # Format partitions
@@ -280,10 +282,10 @@ partition_main_storage() {
     mkswap "${device}${PART_PREFIX}2"
     
     if [[ "$SEPARATE_HOME" == true ]]; then
-        mkfs.xfs "${device}${PART_PREFIX}3"
-        mkfs.xfs "${device}${PART_PREFIX}4"
+        mkfs.${HOME_FS} "${device}${PART_PREFIX}3"
+        mkfs.${ROOT_FS} "${device}${PART_PREFIX}4"
     else
-        mkfs.xfs "${device}${PART_PREFIX}3"
+        mkfs.${ROOT_FS} "${device}${PART_PREFIX}3"
     fi
     
     print_success "Partitioning completed. Proceeding to the next step."
@@ -311,7 +313,7 @@ partition_home_storage() {
     # Check if already partitioned
     if lsblk "$device" | grep -q "part"; then
         print_warning "$device already has partitions"
-        read -p "Do you want to repartition? This will delete all data! [y/N]: " confirm
+        read -r -p "Do you want to repartition? This will delete all data! [y/N]: " confirm
         if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
             print_info "Using existing partitions"
             return 0
@@ -324,10 +326,10 @@ partition_home_storage() {
     
     # Create new partition table
     parted "$device" mklabel gpt
-    parted "$device" mkpart home xfs 1MiB 100%
+    parted "$device" mkpart home ${HOME_FS} 1MiB 100%
     
     # Format
-    mkfs.xfs "${device}${PART_PREFIX}1"
+    mkfs.${HOME_FS} "${device}${PART_PREFIX}1"
     
     print_success "Storage /home partitioned"
 }
@@ -391,7 +393,7 @@ select_kernel() {
     echo "3. linux-zen (optimized kernel)"
     echo "4. linux-hardened (hardened kernel)"
     echo ""
-    read -p "Select kernel [1-4]: " kernel_choice
+    read -r -p "Select kernel [1-4]: " kernel_choice
     
     case $kernel_choice in
         1)
@@ -441,7 +443,7 @@ select_desktop() {
     echo "14. XFCE"
     echo "15. Custom installation"
     echo ""
-    read -p "Select desktop environment [1-15]: " desktop_choice
+    read -r -p "Select desktop environment [1-15]: " desktop_choice
     
     case $desktop_choice in
         1)
@@ -465,7 +467,7 @@ select_desktop() {
         6)
             DESKTOP="deepin"
             DISPLAY_MANAGER="lightdm"
-            read -p "Install deepin-extra? [y/N]: " deepin_confirm
+            read -r -p "Install deepin-extra? [y/N]: " deepin_confirm
             if [[ "$deepin_confirm" =~ ^[Yy]$ ]]; then
                 DEEPIN_EXTRA=true
             fi
@@ -477,7 +479,7 @@ select_desktop() {
             echo "1. gnome-circle"
             echo "2. gnome-extra"
             echo "3. None"
-            read -p "Select [1-3]: " gnome_extra_choice
+            read -r -p "Select [1-3]: " gnome_extra_choice
             case $gnome_extra_choice in
                 1) GNOME_EXTRA_OPTION="gnome-circle" ;;
                 2) GNOME_EXTRA_OPTION="gnome-extra" ;;
@@ -493,7 +495,7 @@ select_desktop() {
             echo "Select display manager:"
             echo "1. SDDM"
             echo "2. Plasma Login Manager"
-            read -p "Select [1-2]: " kde_dm_choice
+            read -r -p "Select [1-2]: " kde_dm_choice
             case $kde_dm_choice in
                 1) 
                     DISPLAY_MANAGER="sddm"
@@ -504,7 +506,7 @@ select_desktop() {
                     KDE_DM_OPTION="plasma-login-manager"
                     ;;
             esac
-            read -p "Install KDE Plasma Mobile? [y/N]: " kde_mobile_confirm
+            read -r -p "Install KDE Plasma Mobile? [y/N]: " kde_mobile_confirm
             if [[ "$kde_mobile_confirm" =~ ^[Yy]$ ]]; then
                 KDE_MOBILE=true
             fi
@@ -552,7 +554,7 @@ select_third_party_repos() {
     echo "3. Chaotic AUR repo"
     echo "4. None"
     echo ""
-    read -p "Select repository [1-4]: " repo_choice
+    read -r -p "Select repository [1-4]: " repo_choice
     
     case $repo_choice in
         1)
@@ -579,11 +581,11 @@ configure_locale() {
     print_header "LOCALIZATION CONFIGURATION"
     
     echo "Timezone (default: Australia/Sydney):"
-    read -p "Enter timezone: " timezone_input
+    read -r -p "Enter timezone: " timezone_input
     TIMEZONE="${timezone_input:-Australia/Sydney}"
     
     echo "Locale (default: en_US.UTF-8):"
-    read -p "Enter locale: " locale_input
+    read -r -p "Enter locale: " locale_input
     LOCALE="${locale_input:-en_US.UTF-8}"
     
     print_success "Localization configured. Proceeding to the next step."
@@ -594,7 +596,7 @@ configure_hostname() {
     clear
     print_header "HOSTNAME CONFIGURATION"
     
-    read -p "Enter hostname: " hostname_input
+    read -r -p "Enter hostname: " hostname_input
     HOSTNAME="${hostname_input:-archlinux}"
     
     print_success "Hostname: $HOSTNAME. Proceeding to the next step."
@@ -607,9 +609,9 @@ configure_users() {
     
     # Root password
     while true; do
-        read -s -p "Enter root password: " root_pass1
+        read -r -s -p "Enter root password: " root_pass1
         echo ""
-        read -s -p "Retype root password: " root_pass2
+        read -r -s -p "Retype root password: " root_pass2
         echo ""
         if [[ "$root_pass1" == "$root_pass2" ]]; then
             ROOT_PASSWORD="$root_pass1"
@@ -620,14 +622,14 @@ configure_users() {
     done
     
     # Username
-    read -p "Enter username: " username_input
+    read -r -p "Enter username: " username_input
     USERNAME="${username_input:-user}"
     
     # User password
     while true; do
-        read -s -p "Enter user password: " user_pass1
+        read -r -s -p "Enter user password: " user_pass1
         echo ""
-        read -s -p "Retype user password: " user_pass2
+        read -r -s -p "Retype user password: " user_pass2
         echo ""
         if [[ "$user_pass1" == "$user_pass2" ]]; then
             USER_PASSWORD="$user_pass1"
@@ -661,7 +663,7 @@ confirm_installation() {
     echo "2. Change options"
     echo "3. Cancel installation"
     echo ""
-    read -p "Select [1-3]: " confirm_choice
+    read -r -p "Select [1-3]: " confirm_choice
     
     case $confirm_choice in
         1)
@@ -1018,6 +1020,14 @@ EOF
 systemctl enable NetworkManager
 EOF
 
+    # Enable periodic TRIM when installing on SSD/NVMe storage
+    if [[ "$HAVE_SSD" == true ]] || [[ "$HAVE_NVME" == true ]]; then
+        cat >> /mnt/chroot-config.sh <<EOF
+# SSD/NVMe detected: enable periodic TRIM
+systemctl enable fstrim.timer
+EOF
+    fi
+
     # GRUB bootloader installation
     cat >> /mnt/chroot-config.sh <<EOF
 # GRUB bootloader installation
@@ -1048,7 +1058,7 @@ finish_installation() {
     
     print_success "Arch Linux successfully installed!"
     echo ""
-    read -p "Do you want to reboot now? [y/N]: " reboot_confirm
+    read -r -p "Do you want to reboot now? [y/N]: " reboot_confirm
     
     if [[ "$reboot_confirm" =~ ^[Yy]$ ]]; then
         reboot

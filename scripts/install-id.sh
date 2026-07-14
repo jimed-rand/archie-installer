@@ -31,7 +31,7 @@ NC='\033[0m' # No Color
 EMMC_DEVICE=""
 SSD_DEVICE=""
 NVME_DEVICE=""
-ESP_SIZE="256M"
+ESP_SIZE_MIB=256
 SWAP_SIZE=""
 ROOT_FS="xfs"
 HOME_FS="xfs"
@@ -155,13 +155,14 @@ select_main_storage() {
     echo "Storage yang tersedia:"
     local index=1
     for storage in "${AVAILABLE_STORAGES[@]}"; do
-        local type=$(echo "$storage" | cut -d: -f1)
-        local device=$(echo "$storage" | cut -d: -f2)
+        local type device
+        type=$(echo "$storage" | cut -d: -f1)
+        device=$(echo "$storage" | cut -d: -f2)
         echo "$index. $type ($device)"
         ((index++))
     done
     
-    read -p "Pilih storage utama untuk sistem (root/): [1-${#AVAILABLE_STORAGES[@]}]: " main_choice
+    read -r -p "Pilih storage utama untuk sistem (root/): [1-${#AVAILABLE_STORAGES[@]}]: " main_choice
     MAIN_STORAGE=$(echo "${AVAILABLE_STORAGES[$((main_choice-1))]}" | cut -d: -f2)
     MAIN_STORAGE_TYPE=$(echo "${AVAILABLE_STORAGES[$((main_choice-1))]}" | cut -d: -f1)
     
@@ -191,13 +192,14 @@ select_home_storage() {
     echo "Pilih lokasi untuk /home:"
     local index=1
     for storage in "${AVAILABLE_STORAGES[@]}"; do
-        local type=$(echo "$storage" | cut -d: -f1)
-        local device=$(echo "$storage" | cut -d: -f2)
+        local type device
+        type=$(echo "$storage" | cut -d: -f1)
+        device=$(echo "$storage" | cut -d: -f2)
         echo "$index. $type ($device)"
         ((index++))
     done
     
-    read -p "Pilih lokasi /home: [1-${#AVAILABLE_STORAGES[@]}]: " home_choice
+    read -r -p "Pilih lokasi /home: [1-${#AVAILABLE_STORAGES[@]}]: " home_choice
     HOME_STORAGE=$(echo "${AVAILABLE_STORAGES[$((home_choice-1))]}" | cut -d: -f2)
     HOME_STORAGE_TYPE=$(echo "${AVAILABLE_STORAGES[$((home_choice-1))]}" | cut -d: -f1)
     
@@ -228,7 +230,7 @@ partition_main_storage() {
     # Cek apakah sudah dipartisi
     if lsblk "$device" | grep -q "part"; then
         print_warning "$device sudah memiliki partisi"
-        read -p "Apakah Anda ingin mempartisi ulang? Ini akan menghapus semua data! [y/N]: " confirm
+        read -r -p "Apakah Anda ingin mempartisi ulang? Ini akan menghapus semua data! [y/N]: " confirm
         if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
             print_info "Menggunakan partisi yang sudah ada"
             return 0
@@ -241,13 +243,13 @@ partition_main_storage() {
     
     # Buat partisi baru dengan parted
     parted "$device" mklabel gpt
-    parted "$device" mkpart ESP fat32 1MiB 257MiB
+    parted "$device" mkpart ESP fat32 1MiB $((ESP_SIZE_MIB + 1))MiB
     parted "$device" set 1 boot on
     parted "$device" set 1 esp on
     
     # Tanya ukuran swap
     echo "Ukuran swap (minimal 4 GiB, maksimal 10 GiB):"
-    read -p "Masukkan ukuran swap dalam GiB [4]: " swap_input
+    read -r -p "Masukkan ukuran swap dalam GiB [4]: " swap_input
     SWAP_SIZE="${swap_input:-4}"
     
     if [[ "$SWAP_SIZE" -lt 4 ]]; then
@@ -257,7 +259,7 @@ partition_main_storage() {
     fi
     
     # Hitung ukuran partisi
-    ESP_END=257
+    ESP_END=$((ESP_SIZE_MIB + 1))
     SWAP_START=$ESP_END
     SWAP_END=$((SWAP_START + (SWAP_SIZE * 1024)))
     
@@ -265,13 +267,13 @@ partition_main_storage() {
     
     # Jika home terpisah di storage yang sama
     if [[ "$SEPARATE_HOME" == true ]]; then
-        read -p "Masukkan ukuran /home dalam GiB: " home_size
+        read -r -p "Masukkan ukuran /home dalam GiB: " home_size
         HOME_START=$SWAP_END
         HOME_END=$((HOME_START + (home_size * 1024)))
-        parted "$device" mkpart home xfs ${HOME_START}MiB ${HOME_END}MiB
-        parted "$device" mkpart root xfs ${HOME_END}MiB 100%
+        parted "$device" mkpart home ${HOME_FS} ${HOME_START}MiB ${HOME_END}MiB
+        parted "$device" mkpart root ${ROOT_FS} ${HOME_END}MiB 100%
     else
-        parted "$device" mkpart root xfs ${SWAP_END}MiB 100%
+        parted "$device" mkpart root ${ROOT_FS} ${SWAP_END}MiB 100%
     fi
     
     # Format partisi
@@ -280,10 +282,10 @@ partition_main_storage() {
     mkswap "${device}${PART_PREFIX}2"
     
     if [[ "$SEPARATE_HOME" == true ]]; then
-        mkfs.xfs "${device}${PART_PREFIX}3"
-        mkfs.xfs "${device}${PART_PREFIX}4"
+        mkfs.${HOME_FS} "${device}${PART_PREFIX}3"
+        mkfs.${ROOT_FS} "${device}${PART_PREFIX}4"
     else
-        mkfs.xfs "${device}${PART_PREFIX}3"
+        mkfs.${ROOT_FS} "${device}${PART_PREFIX}3"
     fi
     
     print_success "Partisi selesai. Lanjut ke langkah berikutnya."
@@ -311,7 +313,7 @@ partition_home_storage() {
     # Cek apakah sudah dipartisi
     if lsblk "$device" | grep -q "part"; then
         print_warning "$device sudah memiliki partisi"
-        read -p "Apakah Anda ingin mempartisi ulang? Ini akan menghapus semua data! [y/N]: " confirm
+        read -r -p "Apakah Anda ingin mempartisi ulang? Ini akan menghapus semua data! [y/N]: " confirm
         if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
             print_info "Menggunakan partisi yang sudah ada"
             return 0
@@ -324,10 +326,10 @@ partition_home_storage() {
     
     # Buat partisi baru
     parted "$device" mklabel gpt
-    parted "$device" mkpart home xfs 1MiB 100%
+    parted "$device" mkpart home ${HOME_FS} 1MiB 100%
     
     # Format
-    mkfs.xfs "${device}${PART_PREFIX}1"
+    mkfs.${HOME_FS} "${device}${PART_PREFIX}1"
     
     print_success "Storage /home dipartisi"
 }
@@ -391,7 +393,7 @@ select_kernel() {
     echo "3. linux-zen (kernel yang dioptimalkan)"
     echo "4. linux-hardened (kernel yang diperketat)"
     echo ""
-    read -p "Pilih kernel [1-4]: " kernel_choice
+    read -r -p "Pilih kernel [1-4]: " kernel_choice
     
     case $kernel_choice in
         1)
@@ -441,7 +443,7 @@ select_desktop() {
     echo "14. XFCE"
     echo "15. Instal kustom (Custom installation)"
     echo ""
-    read -p "Pilih desktop environment [1-15]: " desktop_choice
+    read -r -p "Pilih desktop environment [1-15]: " desktop_choice
     
     case $desktop_choice in
         1)
@@ -465,7 +467,7 @@ select_desktop() {
         6)
             DESKTOP="deepin"
             DISPLAY_MANAGER="lightdm"
-            read -p "Pasang deepin-extra? [y/N]: " deepin_confirm
+            read -r -p "Pasang deepin-extra? [y/N]: " deepin_confirm
             if [[ "$deepin_confirm" =~ ^[Yy]$ ]]; then
                 DEEPIN_EXTRA=true
             fi
@@ -477,7 +479,7 @@ select_desktop() {
             echo "1. gnome-circle"
             echo "2. gnome-extra"
             echo "3. Tidak ada"
-            read -p "Pilih [1-3]: " gnome_extra_choice
+            read -r -p "Pilih [1-3]: " gnome_extra_choice
             case $gnome_extra_choice in
                 1) GNOME_EXTRA_OPTION="gnome-circle" ;;
                 2) GNOME_EXTRA_OPTION="gnome-extra" ;;
@@ -493,7 +495,7 @@ select_desktop() {
             echo "Pilih display manager:"
             echo "1. SDDM"
             echo "2. Plasma Login Manager"
-            read -p "Pilih [1-2]: " kde_dm_choice
+            read -r -p "Pilih [1-2]: " kde_dm_choice
             case $kde_dm_choice in
                 1) 
                     DISPLAY_MANAGER="sddm"
@@ -504,7 +506,7 @@ select_desktop() {
                     KDE_DM_OPTION="plasma-login-manager"
                     ;;
             esac
-            read -p "Pasang KDE Plasma Mobile? [y/N]: " kde_mobile_confirm
+            read -r -p "Pasang KDE Plasma Mobile? [y/N]: " kde_mobile_confirm
             if [[ "$kde_mobile_confirm" =~ ^[Yy]$ ]]; then
                 KDE_MOBILE=true
             fi
@@ -552,7 +554,7 @@ select_third_party_repos() {
     echo "3. Chaotic AUR repo"
     echo "4. Tidak ada"
     echo ""
-    read -p "Pilih repository [1-4]: " repo_choice
+    read -r -p "Pilih repository [1-4]: " repo_choice
     
     case $repo_choice in
         1)
@@ -579,11 +581,11 @@ configure_locale() {
     print_header "KONFIGURASI LOKALISASI"
     
     echo "Timezone (default: Asia/Jakarta):"
-    read -p "Masukkan timezone: " timezone_input
+    read -r -p "Masukkan timezone: " timezone_input
     TIMEZONE="${timezone_input:-Asia/Jakarta}"
     
     echo "Locale (default: en_US.UTF-8):"
-    read -p "Masukkan locale: " locale_input
+    read -r -p "Masukkan locale: " locale_input
     LOCALE="${locale_input:-en_US.UTF-8}"
     
     print_success "Lokalisasi dikonfigurasi. Lanjut ke langkah berikutnya."
@@ -594,7 +596,7 @@ configure_hostname() {
     clear
     print_header "KONFIGURASI HOSTNAME"
     
-    read -p "Masukkan hostname: " hostname_input
+    read -r -p "Masukkan hostname: " hostname_input
     HOSTNAME="${hostname_input:-archlinux}"
     
     print_success "Hostname: $HOSTNAME. Lanjut ke langkah berikutnya."
@@ -607,9 +609,9 @@ configure_users() {
     
     # Root password
     while true; do
-        read -s -p "Masukkan password root: " root_pass1
+        read -r -s -p "Masukkan password root: " root_pass1
         echo ""
-        read -s -p "Ulangi password root: " root_pass2
+        read -r -s -p "Ulangi password root: " root_pass2
         echo ""
         if [[ "$root_pass1" == "$root_pass2" ]]; then
             ROOT_PASSWORD="$root_pass1"
@@ -620,14 +622,14 @@ configure_users() {
     done
     
     # Username
-    read -p "Masukkan username: " username_input
+    read -r -p "Masukkan username: " username_input
     USERNAME="${username_input:-user}"
     
     # User password
     while true; do
-        read -s -p "Masukkan password user: " user_pass1
+        read -r -s -p "Masukkan password user: " user_pass1
         echo ""
-        read -s -p "Ulangi password user: " user_pass2
+        read -r -s -p "Ulangi password user: " user_pass2
         echo ""
         if [[ "$user_pass1" == "$user_pass2" ]]; then
             USER_PASSWORD="$user_pass1"
@@ -661,7 +663,7 @@ confirm_installation() {
     echo "2. Ulangi penetapan opsi"
     echo "3. Batalkan instalasi"
     echo ""
-    read -p "Pilih [1-3]: " confirm_choice
+    read -r -p "Pilih [1-3]: " confirm_choice
     
     case $confirm_choice in
         1)
@@ -1018,6 +1020,14 @@ EOF
 systemctl enable NetworkManager
 EOF
 
+    # Enable periodic TRIM when installing on SSD/NVMe storage
+    if [[ "$HAVE_SSD" == true ]] || [[ "$HAVE_NVME" == true ]]; then
+        cat >> /mnt/chroot-config.sh <<EOF
+# SSD/NVMe detected: enable periodic TRIM
+systemctl enable fstrim.timer
+EOF
+    fi
+
     # GRUB bootloader installation
     cat >> /mnt/chroot-config.sh <<EOF
 # GRUB bootloader installation
@@ -1048,7 +1058,7 @@ finish_installation() {
     
     print_success "Arch Linux berhasil diinstall!"
     echo ""
-    read -p "Apakah Anda ingin reboot sekarang? [y/N]: " reboot_confirm
+    read -r -p "Apakah Anda ingin reboot sekarang? [y/N]: " reboot_confirm
     
     if [[ "$reboot_confirm" =~ ^[Yy]$ ]]; then
         reboot

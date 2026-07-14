@@ -1,10 +1,10 @@
 # archie-installer
 
-Arch Linux installer for Intel low-end/mid-end laptops with eMMC storage.
+Arch Linux installer for Intel low-end/mid-end laptops.
 
 ## Description
 
-This script is designed specifically for installing Arch Linux on Intel low-end/mid-end laptops with eMMC storage (such as ADVAN 1405 and similar models). This script provides automated installation with full Intel hardware support, including complete Intel drivers, and various desktop environment options.
+This script is designed specifically for installing Arch Linux on Intel low-end/mid-end laptops (such as ADVAN 1405 and similar models), especially on every Intel CPUs before merging into Intel Nxxx series. This script provides automated installation with full Intel hardware support, including complete Intel drivers, and various desktop environment options.
 
 ## Features
 
@@ -47,26 +47,12 @@ This script is designed specifically for installing Arch Linux on Intel low-end/
 
 ## Usage
 
-### Step 1: Boot Arch Linux ISO
-Boot from Arch Linux ISO USB on the target laptop.
+You just need to copy the command below into your Arch installation in your laptop:
 
-### Step 2: Download Script
 ```bash
-# Clone repository
-git clone <repository-url>
-cd archie-installer
-
-# Or download directly
-wget <raw-url>/start-here.sh
-chmod +x start-here.sh
+wget -qO- https://raw.githubusercontent.com/jimed-rand/archie-installer/refs/heads/main/start-here.sh | bash
 ```
 
-### Step 3: Run Script
-```bash
-sudo ./start-here.sh
-```
-
-### Step 4: Follow Instructions
 The script will:
 1. Detect laptop hardware
 2. Select language (Indonesian/English)
@@ -108,25 +94,6 @@ The script will:
 - **CachyOS** - Repository with optimized packages
 - **Jim AUR** - AUR repository from jimedrand (OBS)
 - **Chaotic AUR** - AUR repository from Garuda Linux team
-
-## Project Structure
-
-```
-archie-installer/
-├── start-here.sh              # Preliminary detection script
-├── scripts/
-│   ├── install-id.sh          # Indonesian installer
-│   └── install-en.sh          # English installer
-├── README.md                  # This documentation
-└── LICENSE                    # LGPL-2.1 license
-```
-
-## Recent Changes
-
-- **Project Renaming**: The project was renamed from `archie-emmc-installer` to `archie-installer` to reflect broader compatibility and cleanup references across scripts.
-- **English Translation**: Added full translation support (`scripts/install-en.sh`) with translated interactive prompts, system logs, display headers, user choices, and inline comments.
-- **Multi-language Support**: Integrated language selection (Indonesian / English) directly inside the initialization stage of `start-here.sh`.
-- **Default Locale & Timezone**: Configured `en_US.UTF-8` locale and `Australia/Sydney` timezone as defaults for the English installation.
 
 ## License
 

@@ -50,7 +50,11 @@ This script is designed specifically for installing Arch Linux on Intel low-end/
 You just need to copy the command below into your Arch installation in your laptop:
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/jimed-rand/archie-installer/refs/heads/main/start-here.sh | bash
+# This is only when you installing from any Arch-based desktop live
+wget -qO- https://raw.githubusercontent.com/jimed-rand/archie-installer/refs/heads/main/start-here.sh | sudo bash
+
+# This one requires root
+wget -qO- https://raw.githubusercontent.com/jimed-rand/archie-installer/refs/heads/main/start-here.sh | sudo bash
 ```
 
 The script will:

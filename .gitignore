@@ -1,0 +1,37 @@
+# File sementara / Temporary files
+*.tmp
+*.temp
+*~
+
+# File log / Log files
+*.log
+
+# File backup / Backup files
+*.bak
+*.backup
+
+# File sistem / System files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+
+# Direktori build / Build directories
+build/
+dist/
+
+# File konfigurasi lokal / Local configuration
+*.local
+*.conf.local
+
+# Arsitektur lain / Other architectures (jika dikompilasi)
+*.o
+*.a
+*.so
+
+# File yang tidak perlu di-track / Files that don't need tracking
+node_modules/
+vendor/

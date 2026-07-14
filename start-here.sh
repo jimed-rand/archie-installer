@@ -20,6 +20,22 @@
 
 set -e
 
+# When this script is executed via a pipe (e.g. `wget -qO- <url> | bash` or
+# `curl -sL <url> | bash`), stdin is consumed by the pipe carrying the script
+# itself, so `read -p` prompts below would silently fail or read garbage
+# instead of waiting for real user input. Re-point stdin at the controlling
+# terminal so all interactive prompts work correctly regardless of how the
+# script was launched.
+if [ ! -t 0 ]; then
+    if [ -e /dev/tty ]; then
+        exec < /dev/tty
+    else
+        echo "ERROR: This installer requires an interactive terminal (no /dev/tty available)." >&2
+        echo "Download the script and run it directly instead of piping it into bash." >&2
+        exit 1
+    fi
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -506,19 +522,6 @@ determine_model_script() {
     echo "Using installer: $INSTALLER_PATH"
 }
 
-# Function to check internet connection
-check_internet() {
-    print_header "CHECKING INTERNET CONNECTION"
-    
-    if ping -c 1 archlinux.org &>/dev/null; then
-        print_success "Internet connection available"
-        return 0
-    else
-        print_error "No internet connection. Internet is required for installation."
-        return 1
-    fi
-}
-
 # Main execution
 main() {
     clear
@@ -529,13 +532,6 @@ main() {
     # Check if running as root
     if [[ $EUID -ne 0 ]]; then
         print_error "This script must be run as root."
-        exit 1
-    fi
-    
-    # Verify internet connectivity is available (required for downloading packages)
-    echo "Checking internet connection..."
-    if ! check_internet; then
-        print_error "Not connected to Internet. Installation cannot continue without Internet."
         exit 1
     fi
     

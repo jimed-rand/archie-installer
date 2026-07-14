@@ -52,8 +52,8 @@ detect_system() {
     print_header "DETECTING SYSTEM INFORMATION"
     
     # Get CPU info
-    CPU_MODEL=$(cat /proc/cpuinfo | grep 'model name' | head -n1 | cut -d':' -f2 | xargs)
-    CPU_VENDOR=$(cat /proc/cpuinfo | grep 'vendor_id' | head -n1 | cut -d':' -f2 | xargs)
+    CPU_MODEL=$(grep 'model name' /proc/cpuinfo | head -n1 | cut -d':' -f2 | xargs)
+    CPU_VENDOR=$(grep 'vendor_id' /proc/cpuinfo | head -n1 | cut -d':' -f2 | xargs)
     
     # Get storage info
     EMMC_DEVICE=""
@@ -136,7 +136,7 @@ select_language() {
     echo "1. Bahasa Indonesia"
     echo "2. English"
     echo ""
-    read -p "Select language / Pilih bahasa [1-2]: " lang_choice
+    read -r -p "Select language / Pilih bahasa [1-2]: " lang_choice
     
     case $lang_choice in
         1)
@@ -283,7 +283,7 @@ determine_model_script() {
             MODEL="zotac"
             print_success "Detected: ZOTAC"
             ;;
-        *Intel*|*intel*|*NUC*)
+        *NUC*)
             MODEL="intel-nuc"
             print_success "Detected: Intel NUC"
             ;;
@@ -568,7 +568,7 @@ main() {
     echo "Model: $LAPTOP_MODEL"
     echo "Installer: $INSTALLER_PATH"
     echo ""
-    read -p "Continue with installation? [y/N]: " confirm
+    read -r -p "Continue with installation? [y/N]: " confirm
     
     if [[ "$confirm" =~ ^[Yy]$ ]]; then
         print_success "Starting installation..."

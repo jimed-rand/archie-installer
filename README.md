@@ -59,7 +59,7 @@ But if you use official Arch Linux ISOs, use this command below without `sudo` i
 
 ```bash
 # This one requires root
-wget -qO- https://raw.githubusercontent.com/jimed-rand/archie-installer/refs/heads/main/start-here.sh | sudo bash
+wget -qO- https://raw.githubusercontent.com/jimed-rand/archie-installer/refs/heads/main/start-here.sh | bash
 ```
 
 The script will:
